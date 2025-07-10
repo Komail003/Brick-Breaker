@@ -1,0 +1,202 @@
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const splash = document.getElementById("splash");
+const endModal = document.getElementById("endModal");
+const endMessage = document.getElementById("endMessage");
+const startBtn = document.getElementById("startBtn");
+const playAgainBtn = document.getElementById("playAgainBtn");
+const cancelBtn = document.getElementById("cancelBtn");
+
+let animationId;
+let running = false;
+
+// Game variables
+let x, y, dx, dy, paddleX, score;
+const ballRadius = 10;
+const paddleHeight = 12;
+const paddleWidth = 100;
+const brickRowCount = 5;
+const brickColumnCount = 8;
+const brickWidth = 50;
+const brickHeight = 20;
+const brickPadding = 9;
+const brickOffsetTop = 40;
+const totalBricksWidth =
+  brickColumnCount * brickWidth + (brickColumnCount - 1) * brickPadding;
+const brickOffsetLeft = (canvas.width - totalBricksWidth) / 2;
+let bricks = [];
+
+// Input
+let rightPressed = false;
+let leftPressed = false;
+
+document.addEventListener("keydown", (e) => {
+  if (running) {
+    if (e.key === "ArrowRight") rightPressed = true;
+    if (e.key === "ArrowLeft") leftPressed = true;
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (running) {
+    if (e.key === "ArrowRight") rightPressed = false;
+    if (e.key === "ArrowLeft") leftPressed = false;
+  }
+});
+document.addEventListener("mousemove", (e) => {
+  if (running) {
+    const relX = e.clientX - canvas.getBoundingClientRect().left;
+    if (relX > paddleWidth / 2 && relX < canvas.width - paddleWidth / 2)
+      paddleX = relX - paddleWidth / 2;
+  }
+});
+
+function initBricks() {
+  bricks = [];
+  for (let c = 0; c < brickColumnCount; c++) {
+    bricks[c] = [];
+    for (let r = 0; r < brickRowCount; r++)
+      bricks[c][r] = { status: 1, x: 0, y: 0 };
+  }
+}
+
+function initGame() {
+  x = canvas.width / 2;
+  y = canvas.height - 30;
+  dx = 3;
+  dy = -3;
+  paddleX = (canvas.width - paddleWidth) / 2;
+  score = 0;
+  rightPressed = leftPressed = false;
+  initBricks();
+}
+
+function drawBall() {
+  ctx.beginPath();
+  ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+  ctx.fillStyle = "#00ffd5";
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = "#00ffd5";
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.closePath();
+}
+function drawPaddle() {
+  ctx.beginPath();
+  ctx.rect(
+    paddleX,
+    canvas.height - paddleHeight - 10,
+    paddleWidth,
+    paddleHeight
+  );
+  ctx.fillStyle = "#ff00f7";
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = "#ff00f7";
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.closePath();
+}
+function drawBricks() {
+  for (let c = 0; c < brickColumnCount; c++) {
+    for (let r = 0; r < brickRowCount; r++) {
+      const b = bricks[c][r];
+      if (b.status) {
+        b.x = brickOffsetLeft + c * (brickWidth + brickPadding);
+        b.y = brickOffsetTop + r * (brickHeight + brickPadding);
+        ctx.beginPath();
+        ctx.rect(b.x, b.y, brickWidth, brickHeight);
+        ctx.fillStyle = `hsl(${(c / brickColumnCount) * 360},100%,50%)`;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#00ffd5";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.closePath();
+      }
+    }
+  }
+}
+function drawScore() {
+  ctx.font = "18px Segoe UI";
+  ctx.fillStyle = "#00ffd5";
+  ctx.fillText("Score: " + score, 10, 24);
+}
+
+function collisionDetection() {
+  const nextX = x + dx,
+    nextY = y + dy;
+  // bricks
+  for (let c = 0; c < brickColumnCount; c++)
+    for (let r = 0; r < brickRowCount; r++) {
+      const b = bricks[c][r];
+      if (
+        b.status &&
+        nextX + ballRadius > b.x &&
+        nextX - ballRadius < b.x + brickWidth &&
+        nextY + ballRadius > b.y &&
+        nextY - ballRadius < b.y + brickHeight
+      ) {
+        const overlapX = nextX - (b.x + brickWidth / 2),
+          overlapY = nextY - (b.y + brickHeight / 2);
+        Math.abs(overlapX) > Math.abs(overlapY) ? (dx = -dx) : (dy = -dy);
+        b.status = 0;
+        score++;
+        if (score === brickRowCount * brickColumnCount) endGame(true);
+        return;
+      }
+    }
+  // paddle
+  if (
+    nextY + ballRadius > canvas.height - paddleHeight - 10 &&
+    nextX > paddleX &&
+    nextX < paddleX + paddleWidth
+  ) {
+    const hit = (nextX - paddleX) / paddleWidth - 0.5;
+    dx += hit * 2;
+    dy = -dy;
+    y = canvas.height - paddleHeight - 10 - ballRadius;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBricks();
+  drawBall();
+  drawPaddle();
+  drawScore();
+  collisionDetection();
+  // walls
+  if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) dx = -dx;
+  if (y + dy < ballRadius) dy = -dy;
+  else if (y + dy > canvas.height - ballRadius) endGame(false);
+  x += dx;
+  y += dy;
+  if (rightPressed && paddleX < canvas.width - paddleWidth) paddleX += 8;
+  if (leftPressed && paddleX > 0) paddleX -= 8;
+  animationId = requestAnimationFrame(draw);
+}
+
+function startGame() {
+  splash.classList.add("hidden");
+  running = true;
+  initGame();
+  draw();
+}
+function endGame(win) {
+  running = false;
+  cancelAnimationFrame(animationId);
+  endMessage.textContent = win ? "YOU WIN!" : "GAME OVER";
+  endModal.classList.remove("hidden");
+}
+function playAgain() {
+  endModal.classList.add("hidden");
+  initGame();
+  running = true;
+  draw();
+}
+function cancelPlay() {
+  endModal.classList.add("hidden");
+  splash.classList.remove("hidden");
+}
+
+startBtn.onclick = startGame;
+playAgainBtn.onclick = playAgain;
+cancelBtn.onclick = cancelPlay;
